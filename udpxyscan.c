@@ -34,9 +34,7 @@
 #endif
 
 #define max(X,Y)    ((X)>(Y) ? (X):(Y))
-#define MAX(X,Y)    ((X)>(Y) ? (X):(Y))
 #define min(X,Y)    ((X)<(Y) ? (X):(Y))
-#define MIN(X,Y)    ((X)<(Y) ? (X):(Y))
 #define READ_U16d(X) (((X[0])<<8) | (X[1]))
 
 #define MAX_PIDS    8192
@@ -100,8 +98,8 @@ typedef struct _pulling
 static struct               sigaction sa;
 static volatile int         signalFlag;
 static int					verbose;
-static int					threads = 1;
-static int					parse_sdt;
+static int					i_threads = 1;
+static int					i_parse_sdt;
 
 #define MAX_BYTES			(32*1024)
 #define BUFFER_SIZE_FILL_QUIT		(1024*1024)
@@ -172,20 +170,20 @@ int offset = 0;
     printf( "\r\n");
     while( size) {
     int l;
-    
+
         printf( "%04x: ", offset);
-        for( l=0; l<MIN(16,size); l++)
+        for( l=0; l<min(16,size); l++)
             printf( "%02x ", buffer[l]&255);
         while( l<16) {
             printf( "   ");
             l++;
         }
-        for( l=0; l<MIN(16,size); l++)
+        for( l=0; l<min(16,size); l++)
             printf( "%c", buffer[l]<32 ? '.':buffer[l]&255);
         printf( "\r\n");
         buffer += 16;
         offset += 16;
-        size -= MIN(16, size);
+        size -= min(16, size);
     }
 }
 
@@ -699,7 +697,7 @@ unsigned char *b;
 
 				if (p_pid->i_psi_refcount) {
 					handle_psi_packet( b, thisOne);
-					if( !parse_sdt) {
+					if( !i_parse_sdt) {
                         if( thisOne->valid_pmt) {
                             return 0;
                         }
@@ -755,7 +753,7 @@ int i;
 //    thisInstance->p_pids[TSDT_PID].i_psi_refcount++;
 //    thisInstance->p_pids[NIT_PID].i_psi_refcount++;
 //    thisInstance->p_pids[BAT_PID].i_psi_refcount++;
-	if( parse_sdt) {
+	if( i_parse_sdt) {
         thisInstance->p_pids[SDT_PID].i_psi_refcount++;
     }
 //    thisInstance->p_pids[EIT_PID].i_psi_refcount++;
@@ -812,6 +810,19 @@ int i;
 	return NULL;
 }
 
+static void usage()
+{
+	printf( "UDPXYSCAN  - joolzg@btinternet.com\r\n");
+	printf( "\r\n");
+        printf( "short   long       description\r\n");
+        printf( "  u     url        Sets the url to be scanned\r\n");
+        printf( "  m     mask       Sets the mask for scanning\r\n");
+        printf( "  t     threads    Sets the number of threads to run\r\n");
+        printf( "  s     parse_sdt  Parses the SDT to try and get the streams name\r\n");
+        printf( "  v     verbose    Verbose output\r\n");
+        printf( "  h     help       Help\r\n");
+}
+
 int main(int i_argc, char **pp_argv)
 {
 char *url = NULL;
@@ -821,8 +832,9 @@ int count = 0;
 int c;
 
 	if( i_argc==1) {
-        printf( "usage: %s -u <url> -m <url mask>\r\n", pp_argv[0]);
-		exit( -1);	
+
+        usage();
+		exit( -1);
 	}
 
     static const struct option long_options[] =
@@ -835,7 +847,7 @@ int c;
         { "help",      no_argument,       NULL, 'h' },
         { 0, 0, 0, 0 }
 	};
-		
+
     while ( (c = getopt_long(i_argc, pp_argv, "u:t:m:svh", long_options, NULL)) != -1 )
     {
         switch ( c )
@@ -845,8 +857,8 @@ int c;
 			break;
 
 		case 't':
-            threads = strtol( optarg, NULL, 0 );
-			threads = min( threads, MAX_THREADS);
+            i_threads = strtol( optarg, NULL, 0 );
+			i_threads = min( i_threads, MAX_THREADS);
 			break;
 
         case 'm':
@@ -854,7 +866,7 @@ int c;
 			break;
 
 		case 's':
-			parse_sdt = 1;
+			i_parse_sdt = 1;
 			break;
 
 		case 'v':
@@ -863,7 +875,7 @@ int c;
 
         case 'h':
         default:
-	        printf( "usage: %s -u <url> -m <url mask>\r\n", pp_argv[0]);
+	        usage();
 			break;
 
         }
@@ -887,8 +899,8 @@ int c;
 			break;
 
 		default:
-			printf( "usage: %s <url> <url mask>\r\n", argv[0]);
-			exit( -1);	
+			usage();
+			exit( -1);
 	}
 #endif
 
@@ -907,9 +919,9 @@ int c;
 	do {
 	int free;
 
-		for( free=0; pulledFree[ free].used && free<threads; free++)
+		for( free=0; pulledFree[ free].used && free<i_threads; free++)
 			;
-		if( free<threads) {
+		if( free<i_threads) {
 			memset( &pulledFree[ free], 0, sizeof( THIS_INSTANCE));
 			pulledFree[ free].bytesRead = 0;
 			pulledFree[ free].index = count;
