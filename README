@@ -1,0 +1,29 @@
+udpxyscan
+
+This will scan a udpxy server for all available streams and if found will show the url for that stream.
+
+It will also try and scan the stream for the streams name and use this to create the output.
+
+Commands
+
+u url to scan
+m mask for the multicast ip addresses
+v verbose
+t threads, this is multithreaded, max 32 threads
+s scan sdt for channel name
+h help
+
+
+Usage
+
+Scan a udpxy server from 1.2.3.0 to 1.2.3.255 using only 1 thread
+udpxyscan -u http://1.2.3. -m %d:1234
+
+Scan a udpxy server from 1.2.3.0 to 1.2.3.255 using only 32 threads
+udpxyscan -u http://1.2.4. -m %d:1234 -t 32
+
+Scan a udpxy server from 1.2.3.0 to 1.2.3.255 using only 1 thread and parse the SDT if available
+udpxyscan -u http://1.2.3. -m %d:1234 -s
+
+
+
