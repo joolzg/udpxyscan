@@ -4,7 +4,7 @@
 #define USE_BITSTREAM
 #undef  PRINT_SI
 
-#define MAX_THREADS		32
+#define MAX_THREADS		128
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -100,6 +100,7 @@ static volatile int         signalFlag;
 static int					verbose;
 static int					i_threads = 1;
 static int					i_parse_sdt;
+static int					i_not_full;
 
 #define MAX_BYTES			(32*1024)
 #define BUFFER_SIZE_FILL_QUIT		(1024*1024)
@@ -675,7 +676,7 @@ unsigned char *b;
 
 #if defined( USE_BITSTREAM)
 	if( thisOne->bytesRead>(BUFFER_SIZE_FILL_QUIT)) {
-		signalFlag = 2;
+		return 0;
 	}
 
 	b = thisOne->tsBuffer;
@@ -781,7 +782,12 @@ int i;
         curl_easy_setopt(curl, CURLOPT_VERBOSE, VERBOSE_CURL);
         res = curl_easy_perform(curl);
 		if( thisInstance->bytesRead) {
-			printf( "#EXTNF:0,%s (%s)\r\n%s\r\n", thisInstance->service, thisInstance->provider, thisInstance->url);
+			if( !i_not_full) {
+				printf( "%3d:%s\r\n", thisInstance->index, thisInstance->service);
+			} else {
+				printf( "#EXTNF:0,%s (%s)\r\n", thisInstance->service, thisInstance->provider);
+				printf( "%s\r\n", thisInstance->url);
+			}
    	    curl_easy_cleanup(curl);
 		}
    	}
@@ -819,6 +825,7 @@ static void usage()
         printf( "  m     mask       Sets the mask for scanning\r\n");
         printf( "  t     threads    Sets the number of threads to run\r\n");
         printf( "  s     parse_sdt  Parses the SDT to try and get the streams name\r\n");
+        printf( "  f     full       Outputs the full URL \r\n");
         printf( "  v     verbose    Verbose output\r\n");
         printf( "  h     help       Help\r\n");
 }
@@ -843,12 +850,13 @@ int c;
         { "threads",   required_argument, NULL, 't' },
         { "mask",      required_argument, NULL, 'm' },
         { "parse sdt", no_argument,       NULL, 's' },
+        { "full",      no_argument,       NULL, 'f' },
         { "verbose",   no_argument,       NULL, 'v' },
         { "help",      no_argument,       NULL, 'h' },
         { 0, 0, 0, 0 }
 	};
 
-    while ( (c = getopt_long(i_argc, pp_argv, "u:t:m:svh", long_options, NULL)) != -1 )
+    while ( (c = getopt_long(i_argc, pp_argv, "u:t:m:sfvh", long_options, NULL)) != -1 )
     {
         switch ( c )
         {
@@ -867,6 +875,10 @@ int c;
 
 		case 's':
 			i_parse_sdt = 1;
+			break;
+
+		case 'f':
+			i_not_full = 1;
 			break;
 
 		case 'v':
@@ -952,6 +964,9 @@ int c;
 	}
 
 	curl_global_cleanup();
+
+	if( signalFlag)
+		printf( "exited due to signalFlag being %d\r\n", signalFlag);
 
 	exit( EXIT_SUCCESS);
 }
