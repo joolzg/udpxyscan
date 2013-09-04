@@ -30,8 +30,7 @@
  46:Rossiya 2
  47:Auto Plus
  48:STS
- 49:Komedia TV
- 52:Nickelodeon
+ 52:<unknown>
  53:Discovery Channel
  55:Nat Geo Wild
  67:MTV3 Max Sport 1
@@ -45,7 +44,7 @@
  79:ITV 1 London
  80:ITV 2
  81:ITV 4
- 82:<unknown>
+ 82:BBC One London
  83:BBC Two England
  84:ITV 3
  85:Film4
@@ -75,7 +74,8 @@
 109:Sky Movies Action & Adventure
 110:Sky Movies Family
 111:Sky Sports 1
-113:VH1
+112:<unknown>
+113:<unknown>
 114:MTV Classic
 115:MTV Hits
 116:MTV Music
@@ -107,8 +107,8 @@
 142:Sky Sports 3
 143:Sky Sports F1
 144:Sky Sports 4
-145:<unknown>
-146:<unknown>
+145:Sky Sports News
+146:Comedy Central
 147:UK Gold
 148:NTV+ Sport
 149:Setanta Ireland
@@ -144,8 +144,5 @@
 241:JSC Sports HD3
 242:JSC Sports HD4
 244:DR3
-245:<unknown>
+245:JSC Sports HD5
 246:JSC Sports HD6
-249:Service01
-250:Service01
-251:Service01
