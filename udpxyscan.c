@@ -87,8 +87,8 @@ typedef struct _pulling
 	int valid_pmt;
 	int valid_sdt;
 
-	uint8_t provider[ 256];
-	uint8_t service[ 256];
+	char provider[ 256];
+	char service[ 256];
 
 	unsigned char tsBuffer[ (7*188)*32];
 	unsigned long fillB;
@@ -314,7 +314,7 @@ int len;
     len = *es++<<8;
     len |= *es++;
     len &= 0xfff;
-//    printf( "Looking for %02x (%d) - ", type, len); 
+//    printf( "Looking for %02x (%d) - ", type, len);
     while( len)
     {
 //        printf( "[%02x %2d]", es[0], es[1]);
@@ -326,7 +326,7 @@ int len;
         es  += es[1]+2;
     }
 //    printf( "\r\n");
-    
+
     return 0;
 }
 
@@ -391,7 +391,7 @@ static int pmt_count(uint8_t *p_pmt, THIS_INSTANCE *thisInstance)
     				audioCnt++;
                 }
                 else
-                    localDump( p_es, 64);                
+                    localDump( p_es, 64);
                 break;
         }
         j++;
@@ -680,14 +680,13 @@ unsigned char *b;
 	}
 
 	b = thisOne->tsBuffer;
-
 	memcpy( b+thisOne->fillB, contents, realsize);
-	thisOne->fillB = realsize;
+	thisOne->fillB += realsize;
 
 	while( thisOne->fillB>=7*188) {
-	int synced = b[0*188]==0x47 && b[1*188]==0x47 && b[2*188]==0x47 
-				  && b[3*188]==0x47 && b[4*188]==0x47 && b[5*188]==0x47 
-				  && b[6*188]==0x47;
+	int synced = b[0*188]==0x47 && b[1*188]==0x47 && b[2*188]==0x47
+                  && b[3*188]==0x47 && b[4*188]==0x47 && b[5*188]==0x47
+                  && b[6*188]==0x47;
 
 		if( synced) {
 		int ll;
@@ -708,10 +707,10 @@ unsigned char *b;
                             return 0;
                         }
 					}
-				}
+			    }
+		        b += 188;
+                thisOne->fillB -= 188;
 				p_pid->i_last_cc = ts_get_cc( b);
-				b += 188;
-				thisOne->fillB -= 188;
 			}
 		}
 		else {
@@ -785,7 +784,13 @@ int i;
 			if( !i_not_full) {
 				printf( "%3d:%s\r\n", thisInstance->index, thisInstance->service);
 			} else {
-				printf( "#EXTNF:0,%s (%s)\r\n", thisInstance->service, thisInstance->provider);
+			static int addTag = 0;
+
+				if (!addTag) {
+					printf( "#EXTM3U\r\n");
+					addTag = 1;
+				}
+				printf( "#EXTNF:-1,%s (%s)\r\n", thisInstance->service, thisInstance->provider);
 				printf( "%s\r\n", thisInstance->url);
 			}
    	    curl_easy_cleanup(curl);
@@ -958,15 +963,20 @@ int c;
 
 	if( tasksRunning) {
 		while( tasksRunning) {
-			printf( "Waiting for tasks to close %3d                \r", tasksRunning); fflush( stdout);
+			if( !i_not_full) {
+				printf( "Waiting for tasks to close %3d                \r", tasksRunning); fflush( stdout);
+			}
 			sleep(1);
 		}
 	}
 
 	curl_global_cleanup();
 
-	if( signalFlag)
-		printf( "exited due to signalFlag being %d\r\n", signalFlag);
+	if( signalFlag) {
+		if( !i_not_full) {
+			printf( "exited due to signalFlag being %d\r\n", signalFlag);
+		}
+	}
 
 	exit( EXIT_SUCCESS);
 }
