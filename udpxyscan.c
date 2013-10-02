@@ -790,7 +790,7 @@ int i;
 					printf( "#EXTM3U\r\n");
 					addTag = 1;
 				}
-				printf( "#EXTNF:-1,%s (%s)\r\n", thisInstance->service, thisInstance->provider);
+				printf( "#EXTINF:-1,%s (%s)\r\n", thisInstance->service, thisInstance->provider);
 				printf( "%s\r\n", thisInstance->url);
 			}
    	    curl_easy_cleanup(curl);
