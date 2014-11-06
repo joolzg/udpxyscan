@@ -1,10 +1,10 @@
 #define VERBOSE_CURL    0
-#define VERBOSE         0
+#define VERBOSE         1
 
 #define USE_BITSTREAM
 #undef  PRINT_SI
 
-#define MAX_THREADS		128
+#define MAX_THREADS     128
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,6 +40,10 @@
 #define MAX_PIDS    8192
 #define READ_ONCE   7
 
+//static const char *userAgent = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 3 rev: 353 Safari/533.3";
+static char *userAgent = "Lavf/55.22.100";
+static char *httpReferer;
+
 typedef struct ts_pid_t {
     int i_psi_refcount;
     int8_t i_last_cc;
@@ -57,56 +61,57 @@ typedef struct sid_t {
 #if defined( USE_BITSTREAM)
 typedef struct _memorystruct
 {
-	char output[ 1024];
+    char output[ 1024];
 } MemoryStruct;
 #endif
 
 typedef struct _pulling
 {
-	char url[1024];
-	int used;
-	int index;
-	long long bytesRead;
-	pthread_t pulledThread;
+    char url[1024];
+    int used;
+    int index;
+    long long bytesRead;
+    pthread_t pulledThread;
 
-	ts_pid_t p_pids[MAX_PIDS];
-	sid_t **pp_sids;
-	int i_nb_sids;
+    ts_pid_t p_pids[MAX_PIDS];
+    sid_t **pp_sids;
+    int i_nb_sids;
 
 #if defined( USE_BITSTREAM)
-	PSI_TABLE_DECLARE(pp_current_pat_sections);
-	PSI_TABLE_DECLARE(pp_next_pat_sections);
+    unsigned char tsBuffer[ (7*188)*128];
 
-	PSI_TABLE_DECLARE(pp_current_sdt_sections);
-	PSI_TABLE_DECLARE(pp_next_sdt_sections);
+    PSI_TABLE_DECLARE(pp_current_pat_sections);
+    PSI_TABLE_DECLARE(pp_next_pat_sections);
 
-	MemoryStruct ms;
+    PSI_TABLE_DECLARE(pp_current_sdt_sections);
+    PSI_TABLE_DECLARE(pp_next_sdt_sections);
 
-	int videoCnt;
-	int audioCnt;
-	int valid_pmt;
-	int valid_sdt;
+    MemoryStruct ms;
 
-	char provider[ 256];
-	char service[ 256];
+    int videoCnt;
+    int audioCnt;
+    int valid_pmt;
+    int valid_sdt;
 
-	unsigned char tsBuffer[ (7*188)*32];
-	unsigned long fillB;
+    char provider[ 256];
+    char service[ 256];
+
+    unsigned long fillB;
 #endif
 } THIS_INSTANCE;
 
 static struct               sigaction sa;
 static volatile int         signalFlag;
-static int					verbose;
-static int					i_threads = 1;
-static int					i_parse_sdt;
-static int					i_not_full;
+static int                  verbose;
+static int                  i_threads = 1;
+static int                  i_parse_sdt;
+static int                  i_not_full;
 
-#define MAX_BYTES			(32*1024)
-#define BUFFER_SIZE_FILL_QUIT		(1024*1024)
+#define MAX_BYTES           (32*1024)
+#define BUFFER_SIZE_FILL_QUIT (1024*1024)
 
-static volatile int			tasksRunning = 0;
-static THIS_INSTANCE		pulledFree[ MAX_THREADS];
+static volatile int         tasksRunning = 0;
+static THIS_INSTANCE        pulledFree[ MAX_THREADS];
 
 void Die( char *message)
 {
@@ -335,9 +340,9 @@ static int pmt_count(uint8_t *p_pmt, THIS_INSTANCE *thisInstance)
     uint8_t *p_es;
     uint8_t j = 0;
     int cnt = 0;
-	int videoCnt = 0;
-	int audioCnt = 0;
-	MemoryStruct *ms = &thisInstance->ms;
+    int videoCnt = 0;
+    int audioCnt = 0;
+    MemoryStruct *ms = &thisInstance->ms;
 
     while ((p_es = pmt_get_es(p_pmt, j)) != NULL) {
         sprintf( ms->output+strlen( ms->output), "(%04x,%02x)", pmtn_get_pid(p_es), pmtn_get_streamtype(p_es));
@@ -348,7 +353,7 @@ static int pmt_count(uint8_t *p_pmt, THIS_INSTANCE *thisInstance)
             case 2:
             case 27:
                 cnt |= 1;
-				videoCnt++;
+                videoCnt++;
                 break;
 
             // Audio
@@ -356,7 +361,7 @@ static int pmt_count(uint8_t *p_pmt, THIS_INSTANCE *thisInstance)
             case 4:
             case 15:
                 cnt |= 2;
-				audioCnt++;
+                audioCnt++;
                 break;
 
             // Teletext
@@ -372,23 +377,23 @@ static int pmt_count(uint8_t *p_pmt, THIS_INSTANCE *thisInstance)
                     cnt |= 4;   // Subtitles
                 else if( localFind( p_es, 0x6a)) {
                     cnt |= 2;   // AC3
-    				audioCnt++;
+                    audioCnt++;
                 }
                 else if( localFind( p_es, 0x7a)) {
                     cnt |= 2;   // AC3
-    				audioCnt++;
+                    audioCnt++;
                 }
                 else if( localFind( p_es, 0x7b)) {
                     cnt |= 2;   // AC3
-    				audioCnt++;
+                    audioCnt++;
                 }
                 else if( localFind( p_es, 0x7c)) {
                     cnt |= 2;   // AC3
-    				audioCnt++;
+                    audioCnt++;
                 }
                 else if( localFind( p_es, 0x7c)) {
                     cnt |= 2;   // AC3
-    				audioCnt++;
+                    audioCnt++;
                 }
                 else
                     localDump( p_es, 64);
@@ -401,8 +406,8 @@ static int pmt_count(uint8_t *p_pmt, THIS_INSTANCE *thisInstance)
         j++;
     }
 
-	thisInstance->videoCnt = videoCnt;
-	thisInstance->audioCnt = audioCnt;
+    thisInstance->videoCnt = videoCnt;
+    thisInstance->audioCnt = audioCnt;
 
 //    printf( "(%02x,%d,%d) ", cnt, audioCnt, videoCnt);
 
@@ -467,21 +472,21 @@ static void _sdt_do_desc( THIS_INSTANCE *thisInstance, uint8_t *p_descl, uint16_
         j++;
 
         switch (i_tag) {
-			case 0x48:
-                p = desc48_get_provider(p_desc,&i_len);
-				memcpy( thisInstance->provider, p, i_len);
-				thisInstance->provider[ i_len] = 0;
-                p = desc48_get_service(p_desc,&i_len);
-				memcpy( thisInstance->service, p, i_len);
-				thisInstance->service[ i_len] = 0;
-				//printf( "{'%s' '%s'}", thisInstance->provider, thisInstance->service);
-				break;
+            case 0x48:
+                p = (uint8_t *)desc48_get_provider(p_desc,&i_len);
+                memcpy( thisInstance->provider, p, i_len);
+                thisInstance->provider[ i_len] = 0;
+                p = (uint8_t *)desc48_get_service(p_desc,&i_len);
+                memcpy( thisInstance->service, p, i_len);
+                thisInstance->service[ i_len] = 0;
+                //printf( "{'%s' '%s'}", thisInstance->provider, thisInstance->service);
+                break;
 
-			default:
-				//printf( "[%02x] ", i_tag);
-				break;
-		}
-	}
+            default:
+                //printf( "[%02x] ", i_tag);
+                break;
+        }
+    }
 }
 
 static inline void sdt_do_desc( THIS_INSTANCE *thisInstance, uint8_t *p_descs)
@@ -501,8 +506,8 @@ static void sdt_do_table( THIS_INSTANCE *thisInstance, uint8_t **pp_sections)
 
         while ((p_service = sdt_get_service(p_section, j)) != NULL) {
             j++;
-			sdt_do_desc(thisInstance, sdtn_get_descs(p_service));
-		}
+            sdt_do_desc(thisInstance, sdtn_get_descs(p_service));
+        }
     }
 }
 
@@ -528,14 +533,14 @@ static void handle_sdt( THIS_INSTANCE *thisInstance)
     psi_table_copy(thisInstance->pp_current_sdt_sections, thisInstance->pp_next_sdt_sections);
     psi_table_init(thisInstance->pp_next_sdt_sections);
 
-	sdt_do_table(thisInstance, thisInstance->pp_current_sdt_sections);
+    sdt_do_table(thisInstance, thisInstance->pp_current_sdt_sections);
 
 #if defined( PRINT_SI)
     sdt_table_print(thisInstance->pp_current_sdt_sections, print_wrapper, NULL,
                     iconv_wrapper, NULL, i_print_type);
 #endif
 
-	thisInstance->valid_sdt = 1;
+    thisInstance->valid_sdt = 1;
 }
 
 static void handle_sdt_section(uint16_t i_pid, uint8_t *p_section, THIS_INSTANCE *thisInstance)
@@ -667,63 +672,69 @@ THIS_INSTANCE *thisOne = _pulling;
 size_t realsize = size * nmemb;
 #if defined( USE_BITSTREAM)
 unsigned char *b;
+int left;
 #endif
 
     if( signalFlag)
-		return 0;
+        return 0;
 
-	thisOne->bytesRead += realsize;
+    thisOne->bytesRead += realsize;
 
 #if defined( USE_BITSTREAM)
-	if( thisOne->bytesRead>(BUFFER_SIZE_FILL_QUIT)) {
-		return 0;
-	}
+    if( thisOne->bytesRead>(BUFFER_SIZE_FILL_QUIT)) {
+        return 0;
+    }
 
-	b = thisOne->tsBuffer;
-	memcpy( b+thisOne->fillB, contents, realsize);
-	thisOne->fillB += realsize;
+    left = sizeof( thisOne->tsBuffer)-thisOne->fillB;
+    realsize = min( left, realsize);
 
-	while( thisOne->fillB>=7*188) {
-	int synced = b[0*188]==0x47 && b[1*188]==0x47 && b[2*188]==0x47
-                  && b[3*188]==0x47 && b[4*188]==0x47 && b[5*188]==0x47
-                  && b[6*188]==0x47;
+    b = thisOne->tsBuffer;
+    memcpy( b+thisOne->fillB, contents, realsize);
+    thisOne->fillB += realsize;
 
-		if( synced) {
-		int ll;
+    if( thisOne->fillB>=7*188) {
+        while( thisOne->fillB>=7*188) {
+        int synced = b[0*188]==0x47 && b[1*188]==0x47 && b[2*188]==0x47
+                      && b[3*188]==0x47 && b[4*188]==0x47 && b[5*188]==0x47
+                      && b[6*188]==0x47;
 
-			for( ll=0; ll<7; ll++) {
-			uint16_t i_pid = ts_get_pid( b);
-			ts_pid_t *p_pid = &thisOne->p_pids[i_pid];
+            if( synced) {
+            int ll;
 
-				if (p_pid->i_psi_refcount) {
-					handle_psi_packet( b, thisOne);
-					if( !i_parse_sdt) {
-                        if( thisOne->valid_pmt) {
-                            return 0;
+                for( ll=0; ll<7; ll++) {
+                uint16_t i_pid = ts_get_pid( b);
+                ts_pid_t *p_pid = &thisOne->p_pids[i_pid];
+
+                    if (p_pid->i_psi_refcount) {
+                        handle_psi_packet( b, thisOne);
+                        if( !i_parse_sdt) {
+                            if( thisOne->valid_pmt) {
+                                return 0;
+                            }
+                        }
+                        else {
+                            if( thisOne->valid_pmt && thisOne->valid_sdt) {
+                                return 0;
+                            }
                         }
                     }
-                    else {
-                        if( thisOne->valid_pmt && thisOne->valid_sdt) {
-                            return 0;
-                        }
-					}
-			    }
-		        b += 188;
-                thisOne->fillB -= 188;
-				p_pid->i_last_cc = ts_get_cc( b);
-			}
-		}
-		else {
-			do {
-				b++;
-				thisOne->fillB--;
-			} while( thisOne->fillB>187 && b[0]!=0x47);
-		}
-	}
-	memcpy( thisOne->tsBuffer, b, thisOne->fillB);
+                    b += 188;
+                    thisOne->fillB -= 188;
+                    p_pid->i_last_cc = ts_get_cc( b);
+                }
+            }
+            else {
+                do {
+                    b++;
+                    thisOne->fillB--;
+                } while( thisOne->fillB && b[0]!=0x47);
+            }
+        }
+        memcpy( thisOne->tsBuffer, b, thisOne->fillB);
+    }
 #else
-	if( thisOne->bytesRead>MAX_BYTES)
-		return 0;
+    if( thisOne->bytesRead>MAX_BYTES)
+        return 0;
 #endif
 
     return realsize;
@@ -753,7 +764,7 @@ int i;
 //    thisInstance->p_pids[TSDT_PID].i_psi_refcount++;
 //    thisInstance->p_pids[NIT_PID].i_psi_refcount++;
 //    thisInstance->p_pids[BAT_PID].i_psi_refcount++;
-	if( i_parse_sdt) {
+    if( i_parse_sdt) {
         thisInstance->p_pids[SDT_PID].i_psi_refcount++;
     }
 //    thisInstance->p_pids[EIT_PID].i_psi_refcount++;
@@ -763,42 +774,45 @@ int i;
 //    thisInstance->p_pids[SIT_PID].i_psi_refcount++;
 #endif
 
-	if( verbose) {
-		printf( "Pulling %s\r\n", (char *)thisInstance->url); // , inet_ntoa(passed->echoclient.sin_addr)); fflush( stdout);
-	}
+    if( verbose) {
+        printf( "Pulling %s\r\n", (char *)thisInstance->url); // , inet_ntoa(passed->echoclient.sin_addr)); fflush( stdout);
+    }
 
-	strcpy( thisInstance->provider, "<unknown>");
-	strcpy( thisInstance->service, "<unknown>");
-	tasksRunning++;
-	thisInstance->used++;
+    strcpy( thisInstance->provider, "<unknown>");
+    strcpy( thisInstance->service, "<unknown>");
+    tasksRunning++;
+    thisInstance->used++;
     curl = curl_easy_init();
-   	if( curl) {
-   	    curl_easy_setopt(curl, CURLOPT_URL, (char *)thisInstance->url);
-//       	curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent);
+    if( curl) {
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
+        curl_easy_setopt(curl, CURLOPT_URL, (char *)thisInstance->url);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent);
+        if( httpReferer)
+            curl_easy_setopt(curl, CURLOPT_REFERER, httpReferer);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-   	    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)_pulling);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)_pulling);
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5);
         curl_easy_setopt(curl, CURLOPT_VERBOSE, VERBOSE_CURL);
         res = curl_easy_perform(curl);
-		if( thisInstance->bytesRead) {
-			if( !i_not_full) {
-				printf( "%3d:%s\r\n", thisInstance->index, thisInstance->service);
-			} else {
-			static int addTag = 0;
+        if( thisInstance->bytesRead) {
+            if( !i_not_full) {
+                printf( "%3d:%s\r\n", thisInstance->index, thisInstance->service);
+            } else {
+            static int addTag = 0;
 
-				if (!addTag) {
-					printf( "#EXTM3U\r\n");
-					addTag = 1;
-				}
-				printf( "#EXTINF:-1,%s (%s)\r\n", thisInstance->service, thisInstance->provider);
-				printf( "%s\r\n", thisInstance->url);
-			}
-   	    curl_easy_cleanup(curl);
-		}
-   	}
+                if (!addTag) {
+                    printf( "#EXTM3U\r\n");
+                    addTag = 1;
+                }
+                printf( "#EXTINF:-1,%s (%s)\r\n", thisInstance->service, thisInstance->provider);
+                printf( "%s\r\n", thisInstance->url);
+            }
+        }
+        curl_easy_cleanup(curl);
+    }
     if( verbose) {
-		printf( "Pulled  %s (%d) %s\r\n", (char *)thisInstance->url, res, toSize( thisInstance->bytesRead)); fflush( stdout);
-	}
+        printf( "Pulled  %s (%d) %s\r\n", (char *)thisInstance->url, res, toSize( thisInstance->bytesRead)); fflush( stdout);
+    }
 
 #if defined( USE_BITSTREAM)
     for (i = 0; i < thisInstance->i_nb_sids; i++)
@@ -815,24 +829,26 @@ int i;
     psi_table_free(thisInstance->pp_current_sdt_sections);
 #endif
 
-	thisInstance->used = 0;
-	tasksRunning--;
+    thisInstance->used = 0;
+    tasksRunning--;
 
-	return NULL;
+    return NULL;
 }
 
 static void usage()
 {
-	printf( "UDPXYSCAN  - joolzg@btinternet.com\r\n");
-	printf( "\r\n");
+    printf( "UDPXYSCAN  - joolzg@btinternet.com\r\n");
+    printf( "\r\n");
         printf( "short   long       description\r\n");
-        printf( "  u     url        Sets the url to be scanned\r\n");
-        printf( "  m     mask       Sets the mask for scanning\r\n");
-        printf( "  t     threads    Sets the number of threads to run\r\n");
-        printf( "  s     parse_sdt  Parses the SDT to try and get the streams name\r\n");
+        printf( "  a     user_agent Sets the user agent string, default:'%s'\r\n", userAgent);
         printf( "  f     full       Outputs the full URL \r\n");
-        printf( "  v     verbose    Verbose output\r\n");
         printf( "  h     help       Help\r\n");
+        printf( "  m     mask       Sets the mask for scanning\r\n");
+        printf( "  r     referer    Sets the http referer string\n");
+        printf( "  s     parse_sdt  Parses the SDT to try and get the streams name\r\n");
+        printf( "  t     threads    Sets the number of threads to run\r\n");
+        printf( "  u     url        Sets the url to be scanned\r\n");
+        printf( "  v     verbose    Verbose output\r\n");
 }
 
 int main(int i_argc, char **pp_argv)
@@ -843,83 +859,75 @@ int error;
 int count = 0;
 int c;
 
-	if( i_argc==1) {
+    if( i_argc==1) {
 
         usage();
-		exit( -1);
-	}
+        exit( -1);
+    }
 
     static const struct option long_options[] =
     {
-        { "url",       required_argument, NULL, 'u' },
-        { "threads",   required_argument, NULL, 't' },
-        { "mask",      required_argument, NULL, 'm' },
-        { "parse sdt", no_argument,       NULL, 's' },
+        { "user_agent", required_argument, NULL, 'a' },
         { "full",      no_argument,       NULL, 'f' },
-        { "verbose",   no_argument,       NULL, 'v' },
         { "help",      no_argument,       NULL, 'h' },
+        { "mask",      required_argument, NULL, 'm' },
+        { "referer",   required_argument, NULL, 'r' },
+        { "parse sdt", no_argument,       NULL, 's' },
+        { "threads",   required_argument, NULL, 't' },
+        { "url",       required_argument, NULL, 'u' },
+        { "verbose",   no_argument,       NULL, 'v' },
         { 0, 0, 0, 0 }
-	};
+    };
 
-    while ( (c = getopt_long(i_argc, pp_argv, "u:t:m:sfvh", long_options, NULL)) != -1 )
+    while ( (c = getopt_long(i_argc, pp_argv, "u:t:m:r:sfvh", long_options, NULL)) != -1 )
     {
         switch ( c )
         {
-        case 'u':
-			url = optarg;
-			break;
+        case 'a':
+            userAgent = optarg;
+            break;
 
-		case 't':
-            i_threads = strtol( optarg, NULL, 0 );
-			i_threads = min( i_threads, MAX_THREADS);
-			break;
+        case 'f':
+            i_not_full = 1;
+            break;
 
         case 'm':
-			mask = optarg;
-			break;
+            mask = optarg;
+            break;
 
-		case 's':
-			i_parse_sdt = 1;
-			break;
+        case 'r':
+            httpReferer = optarg;
+            break;
 
-		case 'f':
-			i_not_full = 1;
-			break;
+        case 's':
+            i_parse_sdt = 1;
+            break;
 
-		case 'v':
-			verbose = 1;
-			break;
+        case 't':
+            i_threads = strtol( optarg, NULL, 0 );
+            i_threads = min( i_threads, MAX_THREADS);
+            break;
+
+        case 'u':
+            url = optarg;
+            break;
+
+        case 'v':
+            verbose = 1;
+            break;
 
         case 'h':
         default:
-	        usage();
-			break;
+            usage();
+            break;
 
         }
     }
 
-	if( !url || !mask)
-		exit( -2);
-
-#if 0
-	switch( argc) {
-		case 3:
-			mask = strdup( argv[2]);
-			url = strdup( argv[1]);
-			break;
-
-		case 1:
-//			url = strdup( "http://37.139.23.84:25000/udp/239.255.1.");
-//			mask = strdup( "%d:5004");
-			url = strdup( "http://5.158.80.12/udp/239.100.202.");
-			mask = strdup( "%d:1234?key=SW-kvSxOfO3NvzofzZg1Cw");
-			break;
-
-		default:
-			usage();
-			exit( -1);
-	}
-#endif
+    if( !url || !mask) {
+        printf( "Need a URL and MASK to work dummy!!!!\n");
+        exit( -2);
+    }
 
     // prepare to call sigaction()
     sa.sa_handler = signal_handler;
@@ -933,51 +941,48 @@ int c;
 
     signal(SIGPIPE, SIG_IGN);
 
-	do {
-	int free;
+    do {
+    static int free = 0;
 
-		for( free=0; pulledFree[ free].used && free<i_threads; free++)
-			;
-		if( free<i_threads) {
-			memset( &pulledFree[ free], 0, sizeof( THIS_INSTANCE));
-			pulledFree[ free].bytesRead = 0;
-			pulledFree[ free].index = count;
-			strcpy( pulledFree[ free].url, url);
-			sprintf( pulledFree[ free].url+strlen( pulledFree[ free].url), mask, count);
-			pulledFree[ free].used = 1;
-			error = pthread_create( &pulledFree[ free].pulledThread, NULL, pullThread, (void *)&pulledFree[ free]);
-			if( !error) {
-				pthread_detach( pulledFree[ free].pulledThread);
-				count++;
-			}
-			else {
-				pulledFree[ free].used = 0;
-				printf( "Could not start task\r\n");
-				count--;
-			}
-		}
-		else {
-			sleep( 1);
-		}
-	} while( count<256 && !signalFlag);
+        if( !pulledFree[ free].used) {
+            memset( &pulledFree[ free], 0, sizeof( THIS_INSTANCE));
+            pulledFree[ free].bytesRead = 0;
+            pulledFree[ free].index = count;
+            strcpy( pulledFree[ free].url, url);
+            sprintf( pulledFree[ free].url+strlen( pulledFree[ free].url), mask, count);
+            pulledFree[ free].used = 1;
+            error = pthread_create( &pulledFree[ free].pulledThread, NULL, pullThread, (void *)&pulledFree[ free]);
+            if( !error) {
+                pthread_detach( pulledFree[ free].pulledThread);
+                count++;
+            }
+            else {
+                break;
+            }
+        }
+        else if( ++free==i_threads) {
+            sleep( 1);
+            free = 0;
+        }
+    } while( count<256 && !signalFlag);
 
-	if( tasksRunning) {
-		while( tasksRunning) {
-			if( !i_not_full) {
-				printf( "Waiting for tasks to close %3d                \r", tasksRunning); fflush( stdout);
-			}
-			sleep(1);
-		}
-	}
+    printf( "Waiting for tasks to finish\n");
+    while( 1) {
+    int l;
+    int wait = 0;
 
-	curl_global_cleanup();
+        for( l=0; l<i_threads; l++) {
+            if( !pulledFree[l].used) {
+                wait = 1;
+                break;
+            }
+        }
+        if( !wait) {
+            break;
+        }
+    }
 
-	if( signalFlag) {
-		if( !i_not_full) {
-			printf( "exited due to signalFlag being %d\r\n", signalFlag);
-		}
-	}
+    curl_global_cleanup();
 
-	exit( EXIT_SUCCESS);
+    exit( EXIT_SUCCESS);
 }
-
