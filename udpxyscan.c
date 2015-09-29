@@ -957,6 +957,7 @@ int c;
                 count++;
             }
             else {
+                pulledFree[ free].used = 0;
                 break;
             }
         }
@@ -966,19 +967,23 @@ int c;
         }
     } while( count<256 && !signalFlag);
 
-    printf( "Waiting for tasks to finish\n");
-    while( 1) {
+    while( tasksRunning) {
     int l;
     int wait = 0;
 
+        printf( "Waiting for tasks to finish %3d\r", tasksRunning); fflush( stdout);
         for( l=0; l<i_threads; l++) {
-            if( !pulledFree[l].used) {
+            if( pulledFree[l].used) {
+//                printf( "%d ", pulledFree[l].index);
                 wait = 1;
-                break;
             }
         }
+//        printf( "\n");
         if( !wait) {
             break;
+        }
+        else {
+            sleep(1);
         }
     }
 
